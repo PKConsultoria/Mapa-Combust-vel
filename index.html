@@ -1,168 +1,80 @@
+
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Mapa Dinâmico Combustível - HeiGIT</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- Leaflet CSS -->
+  <meta charset="utf-8">
+  <title>Mapa de Postos com Rota</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    body { margin:0; padding:0; font-family: Arial, sans-serif; }
-    #map { height: 90vh; width: 100vw; }
-    h2 { text-align: center; margin: 10px 0; }
-    #instructions { font-size: 14px; text-align: center; margin-bottom: 10px; }
+    #map { height: 100vh; width: 100%; }
+    .leaflet-popup-content { font-size: 14px; }
   </style>
 </head>
 <body>
+  <div id="map"></div>
 
-<h2>Mapa Dinâmico Combustível</h2>
-<div id="instructions">Clique no mapa para escolher <b>origem</b> e <b>destino</b>. Depois veja a rota e postos próximos (até 10 km). Clique novamente para reiniciar.</div>
-<div id="map"></div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFiMDMxMmU4NjI3NjQwYTFhOGNlYTBlZWJiYmU5N2QzIiwiaCI6Im11cm11cjY0In0=";
+    let map = L.map('map').setView([-14.2350, -51.9253], 4); // Brasil
 
-<script>
-  const apiKey = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFiMDMxMmU4NjI3NjQwYTFhOGNlYTBlZWJiYmU5N2QzIiwiaCI6Im11cm11cjY0In0=';
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-  var map = L.map('map').setView([-23.55052, -46.633308], 12);
-  map.doubleClickZoom.disable();  // <-- DESABILITA ZOOM POR DUPO CLIQUE
+    let pontos = [];
+    let rotaLayer = null;
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors'
-  }).addTo(map);
+    map.on('click', async function(e) {
+      if (pontos.length >= 2) {
+        pontos = [];
+        if (rotaLayer) map.removeLayer(rotaLayer);
+        map.eachLayer(layer => {
+          if (layer instanceof L.Marker && !layer._icon.classList.contains("leaflet-marker-shadow")) map.removeLayer(layer);
+        });
+      }
 
-  var markers = [];
-  var rotaLayer = null;
-  var postosLayer = null;
-  var postos = [];
+      pontos.push([e.latlng.lat, e.latlng.lng]);
+      L.marker(e.latlng).addTo(map).bindPopup(pontos.length === 1 ? "Origem" : "Destino").openPopup();
 
-  async function carregarPostos() {
-    const res = await fetch('postos.json');
-    postos = await res.json();
-  }
+      if (pontos.length === 2) {
+        const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${apiKey}&start=${pontos[0][1]},${pontos[0][0]}&end=${pontos[1][1]},${pontos[1][0]}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        const coordinates = data.features[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+        rotaLayer = L.polyline(coordinates, {color: 'blue'}).addTo(map);
+        map.fitBounds(rotaLayer.getBounds());
 
-  function distanciaKm(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  }
+        // carregar postos
+        const postosRes = await fetch("postos.json");
+        const postos = await postosRes.json();
 
-  function buscarPostosProximos(coords) {
-    if (postosLayer) {
-      postosLayer.clearLayers();
-    } else {
-      postosLayer = L.layerGroup().addTo(map);
-    }
+        const routeLine = turf.lineString(data.features[0].geometry.coordinates);
+        const postosNaRota = postos.filter(posto => {
+          return routeLine.geometry.coordinates.some(coord => {
+            const distance = turf.distance(
+              turf.point(coord),
+              turf.point([posto.lon, posto.lat])
+            );
+            return distance <= 10;
+          });
+        });
 
-    const postosProximos = [];
-
-    for (let i = 0; i < coords.length; i += 10) {
-      const lat = coords[i][0];
-      const lon = coords[i][1];
-      postos.forEach(posto => {
-        if (distanciaKm(lat, lon, posto.lat, posto.lon) <= 10) {
-          postosProximos.push(posto);
+        if (postosNaRota.length === 0) {
+          alert("⚠️ Nenhum posto de combustível encontrado dentro de 10 km da rota selecionada.");
+          return;
         }
-      });
-    }
 
-    const nomes = new Set();
-    const postosUnicos = postosProximos.filter(p => {
-      if (nomes.has(p.nome)) return false;
-      nomes.add(p.nome);
-      return true;
+        postosNaRota.forEach(posto => {
+          L.marker([posto.lat, posto.lon]).addTo(map)
+            .bindPopup(`<strong>${posto.nome}</strong><br>Preço: R$ ${posto.preco.toFixed(2)}<br>Combustível: ${posto.combustivel}`);
+        });
+      }
     });
-
-    postosUnicos.forEach(p => {
-      const marker = L.marker([p.lat, p.lon])
-        .bindPopup(`<b>${p.nome}</b><br>Preço: R$ ${p.preco.toFixed(2)}`);
-      postosLayer.addLayer(marker);
-    });
-  }
-
-  async function calcularRota(origem, destino) {
-    const url = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
-
-    const body = {
-      coordinates: [
-        [origem.lng, origem.lat],
-        [destino.lng, destino.lat]
-      ]
-    };
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json, application/geo+json',
-          'Content-Type': 'application/json',
-          'Authorization': apiKey
-        },
-        body: JSON.stringify(body)
-      });
-
-      if (!response.ok) {
-        alert("Erro ao buscar rota: " + response.statusText);
-        return;
-      }
-
-      const data = await response.json();
-
-      if (rotaLayer) {
-        map.removeLayer(rotaLayer);
-      }
-
-      const coords = data.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
-
-      rotaLayer = L.polyline(coords, {color: 'blue', weight: 5}).addTo(map);
-
-      map.fitBounds(rotaLayer.getBounds());
-
-      buscarPostosProximos(coords);
-
-    } catch (err) {
-      alert("Erro ao buscar rota: " + err.message);
-    }
-  }
-
-  function onMapClick(e) {
-    if (markers.length >= 2) {
-      markers.forEach(m => map.removeLayer(m));
-      markers = [];
-      if (rotaLayer) {
-        map.removeLayer(rotaLayer);
-        rotaLayer = null;
-      }
-      if (postosLayer) {
-        postosLayer.clearLayers();
-      }
-    }
-
-    const marker = L.marker(e.latlng).addTo(map);
-    markers.push(marker);
-
-    if (markers.length === 1) {
-      marker.bindPopup("Origem").openPopup();
-    } else if (markers.length === 2) {
-      marker.bindPopup("Destino").openPopup();
-      calcularRota(markers[0].getLatLng(), markers[1].getLatLng());
-    }
-  }
-
-  async function init() {
-    await carregarPostos();
-    map.on('click', onMapClick);
-  }
-
-  init();
-
-</script>
-
+  </script>
 </body>
 </html>
