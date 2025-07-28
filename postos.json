@@ -1,0 +1,7 @@
+[
+  {"nome": "Posto A", "lat": -23.5500, "lon": -46.6400, "preco": 5.49},
+  {"nome": "Posto B", "lat": -23.5600, "lon": -46.6300, "preco": 5.39},
+  {"nome": "Posto C", "lat": -23.5700, "lon": -46.6200, "preco": 5.45},
+  {"nome": "Posto D", "lat": -23.5800, "lon": -46.6100, "preco": 5.35},
+  {"nome": "Posto E", "lat": -23.5900, "lon": -46.6000, "preco": 5.50}
+]
