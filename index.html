@@ -6,23 +6,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 90vh; width: 100%; }
+    body {
+      margin: 0;
+      font-family: sans-serif;
+    }
+
     #controls {
       padding: 10px;
       background: white;
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       position: relative;
       z-index: 1000;
     }
-    input {
+
+    #controls input {
       padding: 6px;
       margin-right: 5px;
       width: 200px;
     }
-    button {
+
+    #controls button {
       padding: 6px 12px;
     }
-    .leaflet-popup-content { font-size: 14px; }
+
+    #map {
+      height: calc(100vh - 56px); /* ajustado para não cobrir o header */
+      width: 100%;
+    }
+
+    .leaflet-popup-content {
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -76,7 +90,6 @@
   });
 
   const iconePadrao = new L.Icon.Default();
-
   let rotaLayer = null;
 
   function limparMapa() {
