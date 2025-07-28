@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -26,6 +25,24 @@
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
+    const iconeOrigem = L.icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
+    const iconeDestino = L.icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
     let pontos = [];
     let rotaLayer = null;
 
@@ -39,40 +56,51 @@
       }
 
       pontos.push([e.latlng.lat, e.latlng.lng]);
-      L.marker(e.latlng).addTo(map).bindPopup(pontos.length === 1 ? "Origem" : "Destino").openPopup();
+
+      const marcador = L.marker(e.latlng, {
+        icon: pontos.length === 1 ? iconeOrigem : iconeDestino
+      }).addTo(map);
+
+      marcador.bindPopup(pontos.length === 1 ? "Origem" : "Destino").openPopup();
 
       if (pontos.length === 2) {
-        const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${apiKey}&start=${pontos[0][1]},${pontos[0][0]}&end=${pontos[1][1]},${pontos[1][0]}`;
-        const response = await fetch(url);
-        const data = await response.json();
-        const coordinates = data.features[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
-        rotaLayer = L.polyline(coordinates, {color: 'blue'}).addTo(map);
-        map.fitBounds(rotaLayer.getBounds());
+        try {
+          const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${apiKey}&start=${pontos[0][1]},${pontos[0][0]}&end=${pontos[1][1]},${pontos[1][0]}`;
+          const response = await fetch(url);
+          if (!response.ok) throw new Error("Erro ao buscar rota");
 
-        // carregar postos
-        const postosRes = await fetch("postos.json");
-        const postos = await postosRes.json();
+          const data = await response.json();
+          const coordinates = data.features[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+          rotaLayer = L.polyline(coordinates, { color: 'blue' }).addTo(map);
+          map.fitBounds(rotaLayer.getBounds());
 
-        const routeLine = turf.lineString(data.features[0].geometry.coordinates);
-        const postosNaRota = postos.filter(posto => {
-          return routeLine.geometry.coordinates.some(coord => {
-            const distance = turf.distance(
-              turf.point(coord),
-              turf.point([posto.lon, posto.lat])
-            );
-            return distance <= 10;
+          // carregar postos
+          const postosRes = await fetch("postos.json");
+          const postos = await postosRes.json();
+
+          const routeLine = turf.lineString(data.features[0].geometry.coordinates);
+          const postosNaRota = postos.filter(posto => {
+            return routeLine.geometry.coordinates.some(coord => {
+              const distance = turf.distance(
+                turf.point(coord),
+                turf.point([posto.lon, posto.lat])
+              );
+              return distance <= 10;
+            });
           });
-        });
 
-        if (postosNaRota.length === 0) {
-          alert("⚠️ Nenhum posto de combustível encontrado dentro de 10 km da rota selecionada.");
-          return;
+          if (postosNaRota.length === 0) {
+            alert("⚠️ Nenhum posto de combustível encontrado dentro de 10 km da rota selecionada.");
+            return;
+          }
+
+          postosNaRota.forEach(posto => {
+            L.marker([posto.lat, posto.lon]).addTo(map)
+              .bindPopup(`<strong>${posto.nome}</strong><br>Preço: R$ ${posto.preco.toFixed(2)}<br>Combustível: ${posto.combustivel}`);
+          });
+        } catch (err) {
+          alert("❌ Erro ao buscar rota. Verifique os pontos selecionados.");
         }
-
-        postosNaRota.forEach(posto => {
-          L.marker([posto.lat, posto.lon]).addTo(map)
-            .bindPopup(`<strong>${posto.nome}</strong><br>Preço: R$ ${posto.preco.toFixed(2)}<br>Combustível: ${posto.combustivel}`);
-        });
       }
     });
   </script>
