@@ -6,113 +6,130 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 100vh; width: 100%; }
-    .leaflet-popup-content { font-size: 14px; }
+    #map { height: 90vh; width: 100%; }
+    #controls {
+      padding: 10px;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    input { padding: 5px; margin-right: 5px; }
+    button { padding: 6px 12px; }
   </style>
 </head>
 <body>
-  <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+<div id="controls">
+  Origem: <input id="origem" type="text" placeholder="Digite a origem">
+  Destino: <input id="destino" type="text" placeholder="Digite o destino">
+  <button onclick="tracarRota()">Traçar Rota</button>
+</div>
 
-  <script>
-    const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFiMDMxMmU4NjI3NjQwYTFhOGNlYTBlZWJiYmU5N2QzIiwiaCI6Im11cm11cjY0In0=";
-    let map = L.map('map').setView([-14.2350, -51.9253], 4); // Brasil
+<div id="map"></div>
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 
-    const iconeVerde = new L.Icon({
-      iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
+<script>
+  const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFiMDMxMmU4NjI3NjQwYTFhOGNlYTBlZWJiYmU5N2QzIiwiaCI6Im11cm11cjY0In0="; // Substitua pela sua chave real
+  let map = L.map('map').setView([-14.2350, -51.9253], 4);
+  let rotaLayer = null;
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  const iconeLilas = new L.Icon({
+    iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-violet.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+
+  function limparMapa() {
+    if (rotaLayer) map.removeLayer(rotaLayer);
+    map.eachLayer(layer => {
+      if (layer instanceof L.Marker && !layer._icon.classList.contains("leaflet-marker-shadow")) map.removeLayer(layer);
     });
+  }
 
-    const iconeVermelho = new L.Icon({
-      iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
+  async function geocodificar(endereco) {
+    const url = `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${encodeURIComponent(endereco)}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.features && json.features.length > 0) {
+      const coords = json.features[0].geometry.coordinates;
+      return [coords[1], coords[0]]; // lat, lng
+    } else {
+      throw new Error(`Endereço não encontrado: ${endereco}`);
+    }
+  }
 
-    let pontos = [];
-    let rotaLayer = null;
+  async function tracarRota() {
+    const origemInput = document.getElementById('origem').value;
+    const destinoInput = document.getElementById('destino').value;
 
-    map.on('click', async function(e) {
-      if (pontos.length >= 2) {
-        pontos = [];
-        if (rotaLayer) map.removeLayer(rotaLayer);
-        map.eachLayer(layer => {
-          if (layer instanceof L.Marker && !layer._icon.classList.contains("leaflet-marker-shadow")) map.removeLayer(layer);
+    if (!origemInput || !destinoInput) {
+      alert("Por favor, preencha ambos os campos.");
+      return;
+    }
+
+    try {
+      limparMapa();
+
+      const origemCoord = await geocodificar(origemInput);
+      const destinoCoord = await geocodificar(destinoInput);
+
+      const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${apiKey}&start=${origemCoord[1]},${origemCoord[0]}&end=${destinoCoord[1]},${destinoCoord[0]}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      const coords = data.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
+      rotaLayer = L.polyline(coords, { color: 'blue' }).addTo(map);
+      map.fitBounds(rotaLayer.getBounds());
+
+      const origem = turf.point([origemCoord[1], origemCoord[0]]);
+      const destino = turf.point([destinoCoord[1], destinoCoord[0]]);
+      const distanciaKm = turf.distance(origem, destino);
+      if (distanciaKm > 500) alert("⚠️ A rota é muito longa.");
+
+      // Carregar postos
+      const postosRes = await fetch("postos.json");
+      const postos = await postosRes.json();
+
+      const linhaRota = turf.lineString(data.features[0].geometry.coordinates);
+      const postosProximos = postos.filter(posto => {
+        return linhaRota.geometry.coordinates.some(coord => {
+          const dist = turf.distance(
+            turf.point(coord),
+            turf.point([posto.lon, posto.lat])
+          );
+          return dist <= 10;
         });
+      });
+
+      if (postosProximos.length === 0) {
+        alert("⚠️ Nenhum posto próximo à rota.");
+        return;
       }
 
-      pontos.push([e.latlng.lat, e.latlng.lng]);
+      // Posto mais barato
+      const postoMaisBarato = postosProximos.reduce((menor, atual) => atual.preco < menor.preco ? atual : menor, postosProximos[0]);
 
-      L.marker(e.latlng, {
-        icon: pontos.length === 1 ? iconeVerde : iconeVermelho
-      }).addTo(map).bindPopup(pontos.length === 1 ? "Origem" : "Destino").openPopup();
+      postosProximos.forEach(posto => {
+        const icone = posto === postoMaisBarato ? iconeLilas : undefined;
+        L.marker([posto.lat, posto.lon], { icon })
+          .addTo(map)
+          .bindPopup(`<strong>${posto.nome}</strong><br>Preço: R$ ${posto.preco.toFixed(2)}<br>Tipo: ${posto.combustivel}${posto === postoMaisBarato ? ' 🔥 Mais barato' : ''}`);
+      });
 
-      if (pontos.length === 2) {
-        const origem = turf.point([pontos[0][1], pontos[0][0]]);
-        const destino = turf.point([pontos[1][1], pontos[1][0]]);
-        const distanciaKm = turf.distance(origem, destino);
+    } catch (err) {
+      alert("Erro: " + err.message);
+    }
+  }
+</script>
 
-        if (distanciaKm > 500) {
-          alert("⚠️ A rota é muito longa (mais de 500 km). A API pode falhar.");
-        }
-
-        try {
-          const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${apiKey}&start=${pontos[0][1]},${pontos[0][0]}&end=${pontos[1][1]},${pontos[1][0]}`;
-          const response = await fetch(url);
-
-          if (!response.ok) {
-            throw new Error("Erro ao buscar rota");
-          }
-
-          const data = await response.json();
-          const coordinates = data.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
-          rotaLayer = L.polyline(coordinates, { color: 'blue' }).addTo(map);
-          map.fitBounds(rotaLayer.getBounds());
-
-          // Carregar postos
-          const postosRes = await fetch("postos.json");
-          const postos = await postosRes.json();
-
-          const linhaRota = turf.lineString(data.features[0].geometry.coordinates);
-          const postosProximos = postos.filter(posto => {
-            return linhaRota.geometry.coordinates.some(coord => {
-              const dist = turf.distance(
-                turf.point(coord),
-                turf.point([posto.lon, posto.lat])
-              );
-              return dist <= 10;
-            });
-          });
-
-          if (postosProximos.length === 0) {
-            alert("⚠️ Nenhum posto de combustível encontrado dentro de 10 km da rota.");
-            return;
-          }
-
-          postosProximos.forEach(posto => {
-            L.marker([posto.lat, posto.lon]).addTo(map)
-              .bindPopup(`<strong>${posto.nome}</strong><br>Preço: R$ ${posto.preco.toFixed(2)}<br>Tipo: ${posto.combustivel}`);
-          });
-
-        } catch (err) {
-          alert("❌ Erro ao buscar a rota. Tente uma rota mais curta.");
-        }
-      }
-    });
-  </script>
 </body>
 </html>
