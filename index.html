@@ -14,8 +14,15 @@
       position: relative;
       z-index: 1000;
     }
-    input { padding: 5px; margin-right: 5px; width: 200px; }
-    button { padding: 6px 12px; }
+    input {
+      padding: 6px;
+      margin-right: 5px;
+      width: 200px;
+    }
+    button {
+      padding: 6px 12px;
+    }
+    .leaflet-popup-content { font-size: 14px; }
   </style>
 </head>
 <body>
@@ -32,7 +39,7 @@
 <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 
 <script>
-  const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFiMDMxMmU4NjI3NjQwYTFhOGNlYTBlZWJiYmU5N2QzIiwiaCI6Im11cm11cjY0In0="; // Substitua com sua chave real da OpenRouteService
+  const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFiMDMxMmU4NjI3NjQwYTFhOGNlYTBlZWJiYmU5N2QzIiwiaCI6Im11cm11cjY0In0=";
 
   const map = L.map('map').setView([-14.2350, -51.9253], 4);
 
@@ -40,15 +47,6 @@
     maxZoom: 18,
     attribution: '© OpenStreetMap'
   }).addTo(map);
-
-  const iconeLilas = new L.Icon({
-    iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-violet.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-  });
 
   const iconeVerde = new L.Icon({
     iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
@@ -67,6 +65,17 @@
     popupAnchor: [1, -34],
     shadowSize: [41, 41]
   });
+
+  const iconeLilas = new L.Icon({
+    iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-violet.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+
+  const iconePadrao = new L.Icon.Default();
 
   let rotaLayer = null;
 
@@ -145,7 +154,8 @@
       const postoMaisBarato = postosProximos.reduce((menor, atual) => atual.preco < menor.preco ? atual : menor, postosProximos[0]);
 
       postosProximos.forEach(posto => {
-        const icone = posto === postoMaisBarato ? iconeLilas : undefined;
+        const icone = posto === postoMaisBarato ? iconeLilas : iconePadrao;
+
         L.marker([posto.lat, posto.lon], { icon })
           .addTo(map)
           .bindPopup(`<strong>${posto.nome}</strong><br>Preço: R$ ${posto.preco.toFixed(2)}<br>Tipo: ${posto.combustivel}${posto === postoMaisBarato ? ' 🔥 Mais barato' : ''}`);
