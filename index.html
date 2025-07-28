@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <title>Mapa de Postos com Rota</title>
@@ -151,12 +151,12 @@
         return;
       }
 
-      const postoMaisBarato = postosProximos.reduce((menor, atual) => atual.preco < menor.preco ? atual : menor, postosProximos[0]);
+      const postoMaisBarato = postosProximos.reduce((menor, atual) =>
+        atual.preco < menor.preco ? atual : menor, postosProximos[0]);
 
       postosProximos.forEach(posto => {
-        const icone = posto === postoMaisBarato ? iconeLilas : iconePadrao;
-
-        L.marker([posto.lat, posto.lon], { icon })
+        const marcadorIcone = posto === postoMaisBarato ? iconeLilas : iconePadrao;
+        L.marker([posto.lat, posto.lon], { icon: marcadorIcone })
           .addTo(map)
           .bindPopup(`<strong>${posto.nome}</strong><br>Preço: R$ ${posto.preco.toFixed(2)}<br>Tipo: ${posto.combustivel}${posto === postoMaisBarato ? ' 🔥 Mais barato' : ''}`);
       });
